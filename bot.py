@@ -1,10 +1,15 @@
 from typing import Final
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import pymongo
 
 TOKEN: Final = '6943202093:AAH5ImfB-dGuxRQgjPtXJ6bj4Fhj8QdRaTE'
 BOT_USERNAME: Final = '@carnegie_chat_bot'
+uri: Final = 'mongodb+srv://carnegie_chat_bot:WelcomeBack@cybersphere.i4tnndd.mongodb.net/?retryWrites=true&w=majority&appName=Cybersphere'
 
+myClient = pymongo.MongoClient(uri)
+myDb = myClient["carnegie_chat_bot"]
+myCol = myDb["users"]
 
 #Command
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -18,17 +23,24 @@ async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 #Responses
 def handle_responses(text: str):
+    global user_id
+    global user_info 
+    user_info = myCol.find_one({"user_id": str(user_id)})
     text = text.lower()
-    if 'hello' in text:
-        return 'Hey there!'
+    if 'hello' in text and user_info:
+        return 'Hey ' + user_info["name"]
     
     return 'I do not understand what you wrote...'
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global user_id
     message_type = update.message.chat.type
     text = update.message.text
-    print(f'User ({update.message.chat_id}) in {message_type}: "{text}"')
+    user_id = update.message.chat_id
+    print(f'User ({user_id}) in {message_type}: "{text}"')
+
+
 
     if message_type == 'group':
         if BOT_USERNAME in text:
