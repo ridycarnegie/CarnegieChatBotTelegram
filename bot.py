@@ -34,7 +34,7 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     permission_details = myPermission.find_one({"poll_id": poll_id})
     if permission_details:
-        permission_statement = "Your permission for \n" + permission_details["Details"] + "\n is "
+        permission_statement = "Your permission for \n" + permission_details["details"] + "\n is "
 
         if 0 in option_ids:
             myPermission.update_one({"poll_id": poll_id}, {"$set": {"Approval": "Approved"}})
@@ -50,7 +50,24 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         print(f"No permission details found for poll ID: {poll_id}")
 
+
 #Responses
+def separate_permission_info(text: str):
+    rList = []
+    myList = text.split("\n")
+    for i in range(0, len(myList)):
+        new_text: str = myList[int(i)]
+        new_list = new_text.split(":")
+        name = new_list[0]
+        description = new_list[1]
+        rList.append(name)
+        rList.append(description)
+    if len(rList) == 6:
+        return rList
+    else: 
+        return False
+
+
 def handle_responses(text: str):
     global user_id
     global user_info 
@@ -87,19 +104,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if responses_value_record == 0:
             response = handle_responses(text)
         elif responses_value_record == 1:
-            question = "Permission\n" + text
-            options = ["Approved", "Rejected", "Resubmit"]
-            sent_poll = await context.bot.send_poll(chat_id=commander_id, question=question, options=options, is_anonymous=False)
-            poll_id = sent_poll.poll.id
-            myPermission.insert_one({
-                "user_id": update.message.chat_id,
-                "poll_id": poll_id  ,
-                "Details": text,
-                "Approval": "",
-                "Time Sent": update.message.date
-            })
-            response = "Your responses have been recorded, Thankyou!"
-            responses_value_record = 0
+            if separate_permission_info(text) == False:
+                response = "Please input using the correct format :\n Name: <Your Name>\nEvent: <Event Name> "
+            else:
+                myList = separate_permission_info(text)
+                question = "Permission\n" + text
+                options = ["Approved", "Rejected", "Resubmit"]
+                sent_poll = await context.bot.send_poll(chat_id=commander_id, question=question, options=options, is_anonymous=False)
+                poll_id = sent_poll.poll.id  
+                myPermission.insert_one({
+                    "user_id": update.message.chat_id,
+                    "poll_id": poll_id  ,
+                    "details" : text,
+                    str(myList[0]): str(myList[1]),
+                    str(myList[2]): str(myList[3]),
+                    str(myList[4]) : str(myList[5]),
+                    "Approval": "",
+                    "Time Sent": update.message.date
+                })
+                response = "Your responses have been recorded, Thankyou!"
+                responses_value_record = 0
 
     
     print("Bot: ", response)
