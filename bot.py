@@ -13,7 +13,6 @@ BOT_USERNAME: Final = '@carnegie_chat_bot'
 uri: Final = 'mongodb+srv://carnegie_chat_bot:WelcomeBack@cybersphere.i4tnndd.mongodb.net/?retryWrites=true&w=majority&appName=Cybersphere'
 commander_id: Final = 5380910790
 
-responses_value_record = 0
 myClient = pymongo.MongoClient(uri)
 myDb = myClient["carnegie_chat_bot"]
 myUser = myDb["users"]
@@ -39,7 +38,7 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     permission_details = myPermission.find_one({"poll_id": poll_id})
     if permission_details:
-        permission_statement = "Your permission for \n" + permission_details["details"] + "\n is "
+        permission_statement = "Your permission for \n" + permission_details["details"] + "\nis "
 
         if 0 in option_ids:
             myPermission.update_one({"poll_id": poll_id}, {"$set": {"Approval": "Approved"}})
@@ -54,7 +53,9 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         print(f"User {user_id} answered with option IDs: {option_ids}")
     else:
         print(f"No permission details found for poll ID: {poll_id}")
-
+async def handle_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.message.chat_id
+    set_state(0, user_id)
 #Responses
 def extract_info(input_text: str):
     info = {"name": None, "date": None}
@@ -75,14 +76,14 @@ def extract_info(input_text: str):
     if date_match:
         date_str = date_match.group(1).strip()
         if date_str.lower() == "today":
-            info["date"] = datetime.now().strftime("%d %B %Y")
+            info["date"] = datetime.now().strftime("%d %B %Y").lower()
         elif date_str.lower() == "tomorrow":
             tomorrow = datetime.now() + timedelta(days=1)
-            info["date"] = tomorrow.strftime("%d %B %Y")
+            info["date"] = tomorrow.strftime("%d %B %Y").lower()
         else:
             try:
                 date_obj = parser.parse(date_str)
-                info["date"] = date_obj.strftime("%d %B %Y")
+                info["date"] = date_obj.strftime("%d %B %Y").lower()
             except ValueError:
                 pass  # Ignore if date parsing fails
     return info
@@ -101,25 +102,30 @@ def parse_date(input_date):
         return standardized_date
     except ValueError:
         return None
-def separate_permission_info(text: str):
+def separate_info(text: str, expectedLong: int, expectedData: str):
     rList = []
     myList = text.split("\n")
-    if len(myList) != 3:
+    if len(myList) != expectedLong:
         return False  # Return False if the format is incorrect
 
     for line in myList:
         parts = line.split(":")
         if len(parts) != 2:
             return False  # Return False if any line doesn't have exactly one colon
-
-        name, description = parts[0].strip(), parts[1].strip()
-        if name.lower() == "date" or name.lower() == "day":
-            name = "date"
-            if parse_date(description):
-                description = parse_date(description)
-            else: 
-                return False
-        rList.extend([name.lower(), description.lower()])
+        if expectedData == "permission":
+            name, description = parts[0].strip(), parts[1].strip()
+            if name.lower() == "date" or name.lower() == "day":
+                name = "date"
+                if parse_date(description):
+                    description = parse_date(description)
+                else: 
+                    return False
+            rList.extend([name.lower(), description.lower()])
+        elif expectedData == "new user":
+            name, description = parts[0].strip(), parts[1].strip()
+            if name.lower == "name" or name.lower() == "myname":
+                name = "name"
+            rList.extend([name.lower(), description.lower()])
 
     return rList
 def handle_responses(text: str):
@@ -127,19 +133,20 @@ def handle_responses(text: str):
     global user_info 
     user_info = myUser.find_one({"user_id": str(user_id)})
     text = text.lower()
-    if 'hello' in text:
-        if user_info:
+    if user_info:
+        if 'hello' in text:
             return 'Hi ' + user_info["name"]
-        else:
-            return "Hey there"
-    elif 'permissions' in text or 'permission' in text:
-        if 'access' in text:
-            if myUser.find_one({"user_id": str(user_id)})["status"] == "Teacher":
-                set_state(2, user_id)
-                return "Are you requesting for permission lists?\nPlease give me the permission info that you want to check\nStudent Name:\nDate:\nPut a hypen if there is no any requirement for the permission"
-        else:
-            set_state(1, user_id)
-            return "Are you asking for permission? To ask for permission please input the data such as: \nYour Name:\nEvent:\nDate: "
+        elif 'permissions' in text or 'permission' in text:
+            if 'access' in text:
+                if myUser.find_one({"user_id": str(user_id)})["status"] == "teacher":
+                    set_state(2, user_id)
+                    return "Are you requesting for permission lists?\nPlease give me the permission info that you want to check\n\nStudent Name:\nDate:\n\nPut a hypen if there is no any requirement for the permission"
+            else:
+                set_state(1, user_id)
+                return "Are you asking for permission? To ask for permission please input the data such as: \n\nEvent:\nDate: "
+    else:
+        set_state(3, user_id)
+        return 'Hi, there seems that this is our first conversation. May i know your name and some of your details? \n\nName: \nGender: \nStatus(P1 - SHS3 or Teacher): '
     return 'I do not understand what you wrote...'
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global user_id
@@ -164,10 +171,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if responses_value_record == 0:
             response = handle_responses(text)
         elif responses_value_record == 1:
-            if separate_permission_info(text) == False:
-                response = "Please input using the correct format :\nName: <Your Name>\nEvent: <Event Name>\nDate: <Event Date>"
+            myInfo = separate_info(text, 2, "permission")
+            if myInfo == False:
+                response = "Please input using the correct format :\n\nEvent: <Event Name>\nDate: <Event Date>"
             else:
-                myList = separate_permission_info(text)
+                myList = myInfo
                 question = "Permission\n" + text
                 options = ["Approved", "Rejected", "Resubmit"]
                 sent_poll = await context.bot.send_poll(chat_id=commander_id, question=question, options=options, is_anonymous=False)
@@ -176,9 +184,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "user_id": update.message.chat_id,
                     "poll_id": poll_id,
                     "details": text,
+                    "name": myUser.find_one({"user_id": str(user_id)})['name'],
                     str(myList[0]): str(myList[1]),
                     str(myList[2]): str(myList[3]),
-                    str(myList[4]) : str(myList[5]),
                     "Approval": "",
                     "Time Sent": update.message.date
                 })
@@ -198,6 +206,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "Approval": "Approved"  # Add condition for approval status
                     }
                 elif new_list["name"] == None and new_list["date"] != None:
+                    print(new_list["date"])
                     query = {
                         "$or": [
                             {"date": new_list["date"]}
@@ -220,14 +229,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 response = "The Lists:\n\n"
                 for result in results:
                     found = True
-                    temp = result['details'] + "\n=================================\n"
+                    temp = result['name'] + "\n" + result['details'] + "\n=================================\n"
                     response += temp # Print only the 'details' field
 
                 # If no results found, print a message
                 if not found:
                     response = "There is no data that is suitable."
                 set_state(0, user_id)
-            
+        elif responses_value_record == 3:
+            myList = separate_info(text, 3, "new user")
+            if myList:
+                myUser.insert_one({
+                        "user_id": str(update.message.chat_id),
+                        str(myList[0]): str(myList[1]),
+                        str(myList[2]): str(myList[3]),
+                        str(myList[4]) : str(myList[5])
+                    })
+                response = "Thankyou, what can i do for you"
+                set_state(0, user_id)
+            else:
+                response = "The format is not correct please fill as the correct format!"
     print("Bot: ", response)
     await update.message.reply_text(response)
 async def error(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -242,6 +263,7 @@ if __name__ == '__main__':
     app.add_handler(CommandHandler('help', help_command))
     app.add_handler(CommandHandler('custom', custom_command))
     app.add_handler(CommandHandler('permission', permission_command))
+    app.add_handler(CommandHandler('reset', handle_reset))
     #Message
     app.add_handler(MessageHandler(filters.TEXT, handle_message))
     #Error
