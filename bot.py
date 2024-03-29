@@ -21,7 +21,13 @@ myState = myDb["State"]
 
 #Command
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Hello! Thanks for chatting with me. How may i help you?")
+    s = myUser.find_one({"user_id": user_id})
+    if s:
+        await update.message.reply_text("Hello")
+    else:
+        set_state(3, user_id)
+        await update.message.reply_text("Hello! Thanks for chatting with me. May i know some of your details?\n\nName: \nGender: \nStatus(P1 - SHS3 or Teacher): ")
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("I am Carnegie Chat Bot (CCB), i am here to assist you with Carnegie's information!")
 async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -125,6 +131,8 @@ def separate_info(text: str, expectedLong: int, expectedData: str):
             name, description = parts[0].strip(), parts[1].strip()
             if name.lower == "name" or name.lower() == "myname":
                 name = "name"
+            if "status" in name:
+                name = "status"
             rList.extend([name.lower(), description.lower()])
 
     return rList
@@ -176,7 +184,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 response = "Please input using the correct format :\n\nEvent: <Event Name>\nDate: <Event Date>"
             else:
                 myList = myInfo
-                question = "Permission\n" + text
+                question = "Permission\n" + myUser.find_one({"user_id": str(user_id)})['name'] +text
                 options = ["Approved", "Rejected", "Resubmit"]
                 sent_poll = await context.bot.send_poll(chat_id=commander_id, question=question, options=options, is_anonymous=False)
                 poll_id = sent_poll.poll.id
