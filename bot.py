@@ -7,7 +7,6 @@ from datetime import datetime, timedelta
 import pymongo
 import re
 
-
 TOKEN: Final = '6943202093:AAH5ImfB-dGuxRQgjPtXJ6bj4Fhj8QdRaTE'
 BOT_USERNAME: Final = '@carnegie_chat_bot'
 uri: Final = 'mongodb+srv://carnegie_chat_bot:WelcomeBack@cybersphere.i4tnndd.mongodb.net/?retryWrites=true&w=majority&appName=Cybersphere'
@@ -21,13 +20,14 @@ myState = myDb["State"]
 
 #Command
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    global user_id
+    user_id = update.message.chat_id
     s = myUser.find_one({"user_id": user_id})
     if s:
         await update.message.reply_text("Hello")
     else:
         set_state(3, user_id)
         await update.message.reply_text("Hello! Thanks for chatting with me. May i know some of your details?\n\nName: \nGender: \nStatus(P1 - SHS3 or Teacher): ")
-
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("I am Carnegie Chat Bot (CCB), i am here to assist you with Carnegie's information!")
 async def custom_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -268,8 +268,6 @@ if __name__ == '__main__':
     poll_answer_handler = PollAnswerHandler(handle_poll_answer) 
     #Command
     app.add_handler(CommandHandler('start', start_command))
-    app.add_handler(CommandHandler('help', help_command))
-    app.add_handler(CommandHandler('custom', custom_command))
     app.add_handler(CommandHandler('permission', permission_command))
     app.add_handler(CommandHandler('reset', handle_reset))
     #Message
